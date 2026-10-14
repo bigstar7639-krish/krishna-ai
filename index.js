@@ -1,98 +1,96 @@
 const express = require('express');
 const fs = require('fs');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const app = express();
 
 let pairCode = null;
-let displayTime = 60;
 let status = 'LOADING';
 
 function deleteAuth(){
   try{
     if(fs.existsSync('auth')) fs.rmSync('auth',{recursive:true,force:true});
-    if(fs.existsSync('krishna-auth')) fs.rmSync('krishna-auth',{recursive:true,force:true});
-    console.log('DELETED');
-    return true;
-  }catch(e){ return false; }
+    if(fs.existsSync('auth_info_baileys')) fs.rmSync('auth_info_baileys',{recursive:true,force:true});
+  }catch(e){}
 }
 
-async function start(){
+async function startKrishna(){
+  const { version } = await fetchLatestBaileysVersion();
   const { state, saveCreds } = await useMultiFileAuthState('auth');
   const sock = makeWASocket({
+    version,
     auth: state,
     printQRInTerminal: false,
-    browser: ['Krishna AI','Chrome','1.0'],
-    connectTimeoutMs: 10000,
-    keepAliveIntervalMs: 10000
+    browser: ['Chrome','Windows','10'],
+    syncFullHistory: false
   });
 
-  sock.ev.on('connection.update', async (u)=>{
-    const { connection } = u;
-    if(connection==='open'){
-      status='CONNECTED';
-      pairCode=null;
-      console.log('CONNECTED 8870799204');
-    }
-    if(connection==='close' && u.lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut){
-      status='LOADING';
-      start();
-    }
-  });
   sock.ev.on('creds.update', saveCreds);
 
+  sock.ev.on('connection.update', async (u)=>{
+    const { connection, lastDisconnect } = u;
+    if(connection==='open'){
+      status='CONNECTED';
+      console.log('✅ CONNECTED 8870799204');
+    }
+    if(connection==='close'){
+      const code = lastDisconnect?.error?.output?.statusCode;
+      if(code!== DisconnectReason.loggedOut){
+        status='LOADING';
+        startKrishna();
+      }
+    }
+  });
+
   if(!state.creds.registered){
-    status='CODE';
-    const makeCode = async () => {
+    status='WAITING_CODE';
+    // 3 sec wait panni code edukkum - WhatsApp ku time venum
+    setTimeout(async ()=>{
       try{
         pairCode = await sock.requestPairingCode('918870799204');
-        displayTime = 60;
-        console.log('CODE:', pairCode);
+        status='CODE';
+        console.log('NEW CODE:', pairCode);
       }catch(e){
-        console.log('retry code...');
+        console.log('Code Error, retry...', e);
+        status='LOADING';
+        setTimeout(startKrishna, 3000);
       }
-    };
-    setTimeout(makeCode, 2000);
-    setInterval(makeCode, 25000);
-    setInterval(()=>{ if(displayTime>0) displayTime--; },1000);
+    }, 4000);
   }
 
   sock.ev.on('messages.upsert', async (m)=>{
     const msg=m.messages[0];
     if(!msg.message || msg.key.fromMe) return;
-    const from=msg.key.remoteJid;
-    const text=msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    await sock.sendMessage(from,{text:`✅ KRISHNA AI LIVE!\n\nNee sonna: ${text}\n\nBot Working Single Device 8870799204`});
+    await sock.sendMessage(msg.key.remoteJid, {text: `✅ KRISHNA AI ONLINE da! 🔥\n\nNee: ${msg.message.conversation || ''}`});
   });
 }
-start();
+startKrishna();
 
 app.get('/', (req,res)=>{
   if(status==='CONNECTED'){
-    res.send('<h1 style="background:#000;color:#0f0;padding:100px;text-align:center">✅ CONNECTED 8870799204<br>BOT WORKING!</h1>');
+    res.send('<h1 style="background:#000;color:#0f0;padding:100px;text-align:center">✅ CONNECTED 8870799204<br>BOT LIVE!</h1>');
   } else if(status==='CODE' && pairCode){
+    const clean = pairCode.replace(/-/g,'');
     res.send(`
-    <html><head><title>Krishna AI</title><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-    <body style="background:#000;color:#fff;text-align:center;padding:15px;font-family:Arial">
+    <body style="background:#000;color:#fff;text-align:center;padding:20px;font-family:Arial">
       <h2 style="color:#0f0">KRISHNA AI - 8870799204</h2>
-      <div style="background:#fff;color:#000;padding:25px;border-radius:20px;display:inline-block;border:4px solid #0f0">
-        <h1 style="font-size:52px;letter-spacing:8px;margin:0">${pairCode}</h1>
-        <p style="color:${displayTime>15?'green':'red'};font-weight:bold;font-size:22px;margin:10px 0">⏰ ${displayTime}s</p>
-        <p style="font-size:12px;color:#666">25 sec ku new code auto</p>
+      <div style="background:#fff;color:#000;padding:30px;border-radius:20px;display:inline-block;border:5px solid #0f0">
+        <h1 style="font-size:55px;letter-spacing:10px;margin:0">${pairCode}</h1>
+        <p style="color:green;font-weight:bold;font-size:20px">⏰ FAST TYPE - 15 SEC ONLY!</p>
       </div>
-      <p style="margin-top:15px">Type Without Dash: <b style="font-size:22px;background:#222;color:#0f0;padding:5px 10px;border-radius:5px">${pairCode.replace(/-/g,'')}</b></p>
-      <p>WhatsApp > ⋮ > Linked Devices > Link a Device > Link with phone number</p>
-      <p style="font-size:12px"><a href="/clear" style="color:orange">Clear Auth - Code varala na click</a></p>
-      <script>setTimeout(()=>location.reload(),25000)</script>
-    </body></html>
+      <p>Type: <b style="font-size:24px;background:#222;color:#0f0;padding:8px 12px;border-radius:8px">${clean}</b></p>
+      <p>WhatsApp 8870799204 la type pannanum!</p>
+      <p><a href="/clear" style="color:orange">Clear Auth</a></p>
+      <script>setTimeout(()=>location.reload(), 20000)</script>
+    </body>
     `);
   } else {
-    res.send('<h2 style="padding:80px;text-align:center">⚡ FAST CODE Generating... 2 sec wait<br><script>setTimeout(()=>location.reload(),2000)</script><br><a href="/clear">Clear Auth</a></h2>');
+    res.send('<h2 style="padding:80px;text-align:center">⚡ Krishna Starting... 5 sec wait<br><script>setTimeout(()=>location.reload(), 3000)</script></h2>');
   }
 });
 
 app.get('/clear', (req,res)=>{
   deleteAuth();
-  res.send('<h1 style="padding:50px;text-align:center">✅ AUTH DELETED!<br><br>Render Dashboard > Manual Deploy > Clear cache & Deploy<br><br><a href="/">Go Home</a></h1>');
+  res.send('<h1 style="padding:50px;text-align:center">✅ DELETED! Now Go Render > Manual Deploy > Clear cache & Deploy<br><br><a href="/">Home</a></h1>');
 });
 
-app.listen(process.env.PORT||3000, ()=>console.log('Server running'));
+app.listen(process.env.PORT||3000, ()=>console.log('Server Started'));
