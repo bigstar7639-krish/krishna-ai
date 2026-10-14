@@ -1,11 +1,9 @@
 {
   "name": "krishna-ai",
-  "version": "1.0.0",
   "main": "index.js",
-  "scripts": { "start": "node index.js" },
   "dependencies": {
     "express": "^4.18.2",
-    "qrcode": "^1.5.3",
-    "@whiskeysockets/baileys": "^6.7.8"
+    "@whiskeysockets/baileys": "^6.7.16",
+    "qrcode-terminal": "^0.12.0"
   }
 }
