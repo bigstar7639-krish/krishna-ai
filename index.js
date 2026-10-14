@@ -3,96 +3,82 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const QRCode = require('qrcode');
 const app = express();
 
-let qrCode = null;
-let pairingCode = null;
-let isConnected = false;
+let qrImg = null;
+let pairCode = null;
+let sockGlobal = null;
+let countdown = 25;
 
-async function startKrishnaAI(){
+async function start(){
   const { state, saveCreds } = await useMultiFileAuthState('krishna-auth');
   const sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    browser: ['Krishna AI', 'Chrome', '1.0']
+    browser: ['Krishna AI','Chrome','1.0']
   });
+  sockGlobal = sock;
 
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    if(qr) qrCode = await QRCode.toDataURL(qr);
-    if(connection === 'open'){
-      isConnected = true;
-      qrCode = null;
-      pairingCode = null;
-      console.log('KRISHNA AI CONNECTED!');
+  sock.ev.on('connection.update', async (u)=>{
+    const { connection, qr, lastDisconnect } = u;
+    if(qr){
+      qrImg = await QRCode.toDataURL(qr);
+      console.log('QR READY');
     }
-    if(connection === 'close'){
-      if(lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut){
-        startKrishnaAI();
-      }
+    if(connection==='open'){
+      console.log('CONNECTED 8870799204');
+    }
+    if(connection==='close' && lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut){
+      start();
     }
   });
-
   sock.ev.on('creds.update', saveCreds);
 
-  if(!sock.authState.creds.registered){
-    const phoneNumber = '918870799204'; // UN NUMBER FIXED!
-    setTimeout(async () => {
+  // PAIRING CODE AUTO GENERATE EVERY 25 SEC
+  if(!state.creds.registered){
+    const genCode = async () => {
       try{
-        const code = await sock.requestPairingCode(phoneNumber);
-        pairingCode = code;
-        console.log('PAIRING CODE FOR 8870799204:', code);
-      }catch(err){
-        console.log('Pairing error, use QR');
+        const code = await sock.requestPairingCode('918870799204');
+        pairCode = code;
+        countdown = 25;
+        console.log('NEW CODE:', code);
+      }catch(e){
+        console.log('Code gen wait...');
       }
-    }, 3000);
+    };
+    await genCode();
+    setInterval(genCode, 25000); // Every 25 sec new code
+    setInterval(()=>{ if(countdown>0) countdown--; }, 1000);
   }
 
-  sock.ev.on('messages.upsert', async (m) => {
-    const msg = m.messages[0];
-    if(!msg.message || msg.key.fromMe) return;
-    const from = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    const lower = text.toLowerCase();
-    let reply = '';
-    if(lower.includes('hi') || lower.includes('vanakkam')){
-      reply = 'Vanakkam da! 🙏 Naan Krishna AI! Bill, QR, Photo ellam mudiyum! Enna venum?';
-    } else if(lower.includes('bill')){
-      const amt = text.match(/\d+/)?.[0] || '1000';
-      reply = `🧾 KRISHNA STORE\nAmount: Rs.${amt}\nTotal: Rs.${Math.floor(amt*1.18)}\nNandri da!`;
-    } else {
-      reply = `🤖 KRISHNA AI: ${text} - Help pannuven da!`;
-    }
-    await sock.sendMessage(from, { text: reply });
+  sock.ev.on('messages.upsert', async (m)=>{
+    const msg=m.messages[0]; if(!msg.message||msg.key.fromMe) return;
+    const from=msg.key.remoteJid;
+    const text=msg.message.conversation||msg.message.extendedTextMessage?.text||'';
+    await sock.sendMessage(from,{text:`✅ KRISHNA AI LIVE! Nee: ${text}`});
   });
 }
-
-startKrishnaAI();
+start();
 
 app.get('/', (req,res)=>{
-  if(isConnected){
-    res.send('<html><body style="background:#000;color:#0f0;text-align:center;padding:80px;font-family:sans-serif"><h1>✅ KRISHNA AI CONNECTED!<br>8870799204 READY!</h1><p>Bot Working 100%</p></body></html>');
-  } else if(pairingCode){
-    res.send(`
-      <html><body style="background:#000;color:#fff;text-align:center;padding:20px;font-family:sans-serif">
-      <h2 style="color:#0f0">🔢 KRISHNA AI - 8870799204</h2>
-      <div style="background:#fff;color:#000;padding:25px;border-radius:15px;display:inline-block;margin:20px">
-      <h1 style="font-size:50px;letter-spacing:12px;margin:0">${pairingCode}</h1>
-      </div>
-      <p style="background:#222;padding:15px;border-radius:10px;display:inline-block;text-align:left">
-      WhatsApp la:<br>
-      1. Settings > Linked Devices<br>
-      2. Link a Device<br>
-      3. Link with phone number<br>
-      4. Enter this code
-      </p>
-      <p>Number: 8870799204</p>
-      <script>setTimeout(()=>location.reload(),10000)</script>
-      </body></html>
-    `);
-  } else if(qrCode){
-    res.send(`<body style="background:#000;color:#fff;text-align:center;padding:20px"><h2 style="color:#0f0">SCAN QR - 8870799204</h2><img src="${qrCode}" style="width:300px;background:#fff;padding:15px;border-radius:15px"/><h1>${pairingCode||'Loading code...'}</h1><script>setTimeout(()=>location.reload(),5000)</script></body>`);
-  } else {
-    res.send('<h2 style="padding:100px;text-align:center">⏳ Generating code for 8870799204... 5 sec la refresh!</h2><script>setTimeout(()=>location.reload(),3000)</script>');
-  }
+  res.send(`
+  <html><head><meta http-equiv="refresh" content="25"></head>
+  <body style="background:#000;color:#fff;text-align:center;padding:15px;font-family:sans-serif">
+    <h2 style="color:#0f0">🔥 KRISHNA AI - 8870799204</h2>
+    ${pairCode? `
+    <div style="background:#fff;color:#000;padding:20px;border-radius:15px;display:inline-block;margin:10px">
+      <h1 style="font-size:48px;letter-spacing:10px;margin:0">${pairCode}</h1>
+      <p style="color:red;font-weight:bold;margin:5px 0">⏰ ${countdown} sec la new code varum!</p>
+    </div>
+    <p>WhatsApp > Linked Devices > Link with phone number > Fast type pannu!</p>
+    ` : ''}
+    ${qrImg? `<p>OR QR Scan:</p><img src="${qrImg}" style="width:260px;background:#fff;padding:12px;border-radius:15px"/>` : '<p>Loading code...</p>'}
+    <p style="color:#aaa;margin-top:15px">Auto refresh every 25 sec - Page ah close panna koodathu!</p>
+    <p style="color:#0f0">Number: 8870799204</p>
+    <script>
+      let c=${countdown};
+      setInterval(()=>{ c--; document.querySelector('p').innerHTML = '⏰ '+c+' sec la new code varum!'; },1000);
+    </script>
+  </body></html>
+  `);
 });
 
-app.listen(process.env.PORT||3000, ()=>console.log('KRISHNA AI LIVE 8870799204'));
+app.listen(process.env.PORT||3000);
